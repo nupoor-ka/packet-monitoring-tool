@@ -1,0 +1,39 @@
+// This file tells VS Code how to build and run your Dev Container.
+{
+  // Name your dev container
+  "name": "eBPF Packet Tracer Dev",
+
+  // Tell VS Code to build from our Dockerfile
+  "dockerFile": "../Dockerfile",
+
+  // --- THIS IS THE CRITICAL PART FOR eBPF ---
+  // We must run the container in "privileged" mode to access kernel tracepoints.
+  // We also mount the kernel's debug and module paths.
+  "runArgs": [
+    "--privileged",
+    "--pid=host",
+    "-v",
+    "/sys/kernel/debug:/sys/kernel/debug:rw",
+    "-v",
+    "/lib/modules:/lib/modules:ro"
+  ],
+  // ------------------------------------------
+
+  // Add VS Code extensions and settings inside "customizations"
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python"
+      ],
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash"
+      }
+    }
+  },
+
+  // Use this to keep the container alive
+  "overrideCommand": false,
+  "workspaceFolder": "/workspaces"
+}
+
+
