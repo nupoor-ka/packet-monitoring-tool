@@ -25,16 +25,28 @@ monitor_process = None
 monitor_running = False
 
 def parse_packet_event(line):
-    """Parse packet event from monitor output"""
-    try:
-        # Simple parsing - adapt based on actual output format
-        event = {
-            'timestamp': time.time(),
-            'data': line.strip()
-        }
-        return event
-    except:
+    """Parse and classify each packet event by protocol"""
+    global stats
+    text = line.strip()
+    if not text or "Loading eBPF" in text or "Monitoring packets" in text:
         return None
+
+    event = {
+        'timestamp': time.strftime("%I:%M:%S %p"),
+        'data': text
+    }
+
+    # Detect protocol only in lines that mention it
+    if "Protocol:" in text:
+        if "Protocol: TCP" in text:
+            stats['tcp_drops'] += 1
+        elif "Protocol: UDP" in text:
+            stats['udp_drops'] += 1
+        else:
+            stats['other_drops'] += 1
+        stats['total_drops'] += 1
+
+    return event
 
 def monitor_packets():
     """Background thread to monitor packets"""

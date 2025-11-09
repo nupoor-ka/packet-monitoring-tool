@@ -39,10 +39,22 @@ socket.on('initial_data', (data) => {
 });
 
 socket.on('packet_event', (event) => {
+    const data = event.data || "";
+
+    // Detect protocol type
+    if (data.includes("Protocol: TCP")) {
+        stats.tcp_drops++;
+    } else if (data.includes("Protocol: UDP")) {
+        stats.udp_drops++;
+    } else {
+        stats.other_drops++;
+    }
+
     stats.total_drops++;
     updateStats();
     addEvent(event);
 });
+
 
 socket.on('status', (data) => {
     updateStatus(data.running);
@@ -90,8 +102,15 @@ function updateStats() {
 function addEvent(event) {
     const eventEl = document.createElement('div');
     eventEl.className = 'event';
-    
-    const timestamp = new Date(event.timestamp * 1000).toLocaleTimeString();
+    if (event.data.includes("Protocol: TCP")) {
+    eventEl.style.borderLeft = "4px solid #00ff99"; // green
+    } else if (event.data.includes("Protocol: UDP")) {
+    eventEl.style.borderLeft = "4px solid #3399ff"; // blue
+    } else {
+    eventEl.style.borderLeft = "4px solid #888"; // gray
+    }
+
+    const timestamp = event.timestamp || new Date().toLocaleTimeString();
     eventEl.textContent = `[${timestamp}] ${event.data}`;
     
     eventsEl.insertBefore(eventEl, eventsEl.firstChild);
