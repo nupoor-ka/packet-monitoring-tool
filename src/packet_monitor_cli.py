@@ -7,10 +7,6 @@ import re
 
 OUTPUT_FILE = "/home/astitva/packet_drops.log"
 
-
-# ===============================================================
-# STEP 1: Detect if kernel tracepoint exposes "reason" field
-# ===============================================================
 def kfree_has_reason():
     fmt = "/sys/kernel/debug/tracing/events/skb/kfree_skb/format"
     try:
@@ -20,10 +16,6 @@ def kfree_has_reason():
     except Exception:
         return False
 
-
-# ===============================================================
-# STEP 2: Auto-load drop reason mapping from kernel headers
-# ===============================================================
 def load_drop_reason_map():
     mapping = {}
     try:
@@ -56,10 +48,6 @@ def load_drop_reason_map():
 DROP_REASON_MAP = load_drop_reason_map()
 WITH_REASON = kfree_has_reason()
 
-
-# ===============================================================
-# STEP 3: eBPF Program Definitions
-# ===============================================================
 COMMON_C = r"""
 #include <uapi/linux/ptrace.h>
 #include <linux/skbuff.h>
@@ -94,7 +82,6 @@ static __inline void set_reason(char *dst, const char *src, int n) {
 }
 """
 
-# --- With reason support (modern kernels) ---
 PROG_WITH_REASON = COMMON_C + r"""
 TRACEPOINT_PROBE(skb, kfree_skb) {
     struct packet_event data = {};
@@ -155,7 +142,7 @@ TRACEPOINT_PROBE(net, net_dev_xmit) {
 }
 """
 
-# --- Without reason support (older kernels) ---
+# Without reason support (older kernels) 
 PROG_NO_REASON = COMMON_C + r"""
 TRACEPOINT_PROBE(skb, kfree_skb) {
     struct packet_event data = {};
@@ -216,10 +203,6 @@ TRACEPOINT_PROBE(net, net_dev_xmit) {
 }
 """
 
-
-# ===============================================================
-# STEP 4: Python-side structure + printer
-# ===============================================================
 class Data(ct.Structure):
     _fields_ = [
         ("timestamp", ct.c_ulonglong),
@@ -262,7 +245,6 @@ def print_event(cpu, data, size):
     src_ip, dst_ip = ntoa(ev.saddr), ntoa(ev.daddr)
     sport, dport = socket.ntohs(ev.sport), socket.ntohs(ev.dport)
 
-    # Determine reason name
     if ev.drop_reason != 0:
         reason_h = DROP_REASON_MAP.get(ev.drop_reason, f"code={ev.drop_reason}")
     else:
@@ -281,10 +263,6 @@ def print_event(cpu, data, size):
     except Exception:
         pass
 
-
-# ===============================================================
-# STEP 5: Main execution
-# ===============================================================
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Trace where and why packets drop (eBPF)")
     _ = parser.parse_args()
