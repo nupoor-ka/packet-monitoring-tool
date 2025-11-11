@@ -31,10 +31,6 @@ def parse_event_line(line):
     if not line or not line.startswith("["):
         return None
 
-    # Match structured lines like:
-    # [2025-11-10 16:27:38] PID: 9558, COMM: firefox
-    #   IF: enp0s3, 172.64.155.209:443 -> 10.0.2.15:49992
-    #   Protocol: TCP, Length: 20 bytes, Reason:
     try:
         timestamp_match = re.search(r"\[(.*?)\]", line)
         pid_comm_match = re.search(r"PID:\s*(\d+),\s*COMM:\s*(.*)", line)
