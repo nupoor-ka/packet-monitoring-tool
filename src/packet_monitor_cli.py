@@ -5,7 +5,7 @@ from datetime import datetime
 import ctypes as ct
 import re
 
-OUTPUT_FILE = "/home/astitva/packet_drops.log"
+OUTPUT_FILE = "packet_drops.log"
 
 def kfree_has_reason():
     fmt = "/sys/kernel/debug/tracing/events/skb/kfree_skb/format"
@@ -35,7 +35,7 @@ def load_drop_reason_map():
                     return mapping
     except Exception:
         pass
-    print("[!] Could not auto-load drop reasons — using minimal fallback map.")
+    print("Could not auto-load drop reasons using minimal fallback map.")
     return {
         0: "NOT_SPECIFIED",
         1: "NO_SOCKET",
@@ -126,7 +126,7 @@ TRACEPOINT_PROBE(skb, kfree_skb) {
     return 0;
 }
 
-// Transmit failures
+//transmit failures
 TRACEPOINT_PROBE(net, net_dev_xmit) {
     if (args->rc == 0)
         return 0;
@@ -142,66 +142,6 @@ TRACEPOINT_PROBE(net, net_dev_xmit) {
 }
 """
 
-# Without reason support (older kernels) 
-PROG_NO_REASON = COMMON_C + r"""
-TRACEPOINT_PROBE(skb, kfree_skb) {
-    struct packet_event data = {};
-    struct sk_buff *skb = (struct sk_buff *)args->skbaddr;
-    if (!skb) return 0;
-
-    data.timestamp = bpf_ktime_get_ns();
-    data.pid = bpf_get_current_pid_tgid() >> 32;
-    bpf_get_current_comm(&data.comm, sizeof(data.comm));
-
-    if (skb->dev)
-        bpf_probe_read_kernel_str(&data.ifname, sizeof(data.ifname), skb->dev->name);
-    else
-        set_reason(data.ifname, "unknown", 7);
-
-    if (skb->protocol == htons(ETH_P_IP)) {
-        struct iphdr iph = {};
-        if (bpf_probe_read_kernel(&iph, sizeof(iph), skb->head + skb->network_header) == 0) {
-            data.saddr = iph.saddr;
-            data.daddr = iph.daddr;
-            data.protocol = iph.protocol;
-
-            if (data.protocol == IPPROTO_TCP) {
-                struct tcphdr tcph = {};
-                if (bpf_probe_read_kernel(&tcph, sizeof(tcph), skb->head + skb->transport_header) == 0) {
-                    data.sport = tcph.source;
-                    data.dport = tcph.dest;
-                }
-            } else if (data.protocol == IPPROTO_UDP) {
-                struct udphdr udph = {};
-                if (bpf_probe_read_kernel(&udph, sizeof(udph), skb->head + skb->transport_header) == 0) {
-                    data.sport = udph.source;
-                    data.dport = udph.dest;
-                }
-            }
-        }
-    }
-
-    data.len = skb->len;
-    data.drop_reason = 0;
-    set_reason(data.reason, "kfree_skb", 10);
-    events.perf_submit(args, &data, sizeof(data));
-    return 0;
-}
-
-TRACEPOINT_PROBE(net, net_dev_xmit) {
-    if (args->rc == 0)
-        return 0;
-    struct packet_event data = {};
-    data.timestamp = bpf_ktime_get_ns();
-    data.pid = bpf_get_current_pid_tgid() >> 32;
-    bpf_get_current_comm(&data.comm, sizeof(data.comm));
-    set_reason(data.ifname, "net_dev_xmit", 13);
-    set_reason(data.reason, "transmit_failed", 16);
-    data.drop_reason = 0;
-    events.perf_submit(args, &data, sizeof(data));
-    return 0;
-}
-"""
 
 class Data(ct.Structure):
     _fields_ = [
@@ -258,7 +198,7 @@ def print_event(cpu, data, size):
     print(log_line, flush=True)
 
     try:
-        with open(OUTPUT_FILE, "a") as f:
+        with open(OUTPUT_FILE, "w") as f:
             f.write(log_line)
     except Exception:
         pass
@@ -268,14 +208,14 @@ if __name__ == "__main__":
     _ = parser.parse_args()
 
     program = PROG_WITH_REASON if WITH_REASON else PROG_NO_REASON
-    print(f"Loading eBPF program... Logging to {OUTPUT_FILE}")
+    print(f"Loading eBPF program Logging to {OUTPUT_FILE}")
     b = BPF(text=program)
     b["events"].open_perf_buffer(print_event)
-    print("Monitoring packets... Press Ctrl+C to exit.")
+    print("Monitoring packets Press Ctrl+C to exit.")
 
     try:
         while True:
             b.perf_buffer_poll()
     except KeyboardInterrupt:
-        print("\nExiting...")
+        print("\nExiting")
 

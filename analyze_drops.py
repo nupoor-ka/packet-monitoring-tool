@@ -4,7 +4,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from datetime import datetime
 
-LOG_FILE = "/home/astitva/packet_drops.log"
+LOG_FILE = "packet_drops.log"
 OUTPUT_DIR = "plots"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
