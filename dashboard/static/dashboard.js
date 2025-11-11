@@ -18,49 +18,39 @@ let stats = {
     other_drops: 0
 };
 
-// Socket event handlers
-socket.on('connect', () => {
-    console.log('Connected to server');
-});
+// Throttle UI updates
+let lastRender = 0;
+const RENDER_INTERVAL = 10;
 
-socket.on('disconnect', () => {
-    console.log('Disconnected from server');
-    updateStatus(false);
-});
+// Socket event handlers
+socket.on('connect', () => console.log('Connected to server'));
+socket.on('disconnect', () => updateStatus(false));
 
 socket.on('initial_data', (data) => {
     stats = data.stats;
     updateStats();
-    
-    // Display initial events
-    data.events.forEach(event => {
-        addEvent(event);
-    });
+    data.events.forEach(addEvent);
 });
 
 socket.on('packet_event', (event) => {
-    const data = event.data || "";
-
-    // Detect protocol type
-    if (data.includes("Protocol: TCP")) {
-        stats.tcp_drops++;
-    } else if (data.includes("Protocol: UDP")) {
-        stats.udp_drops++;
-    } else {
-        stats.other_drops++;
-    }
-
     stats.total_drops++;
-    updateStats();
-    addEvent(event);
+
+    const proto = (event.protocol || "").toUpperCase();
+    if (proto.includes("TCP")) stats.tcp_drops++;
+    else if (proto.includes("UDP")) stats.udp_drops++;
+    else stats.other_drops++;
+
+    const now = Date.now();
+    if (now - lastRender > RENDER_INTERVAL) {
+        updateStats();
+        addEvent(event);
+        lastRender = now;
+    }
 });
 
+socket.on('status', (data) => updateStatus(data.running));
 
-socket.on('status', (data) => {
-    updateStatus(data.running);
-});
-
-// Control functions
+// Control buttons
 function startMonitor() {
     socket.emit('start_monitor');
     updateStatus(true);
@@ -78,18 +68,10 @@ function clearEvents() {
 // UI update functions
 function updateStatus(running) {
     isMonitoring = running;
-    
-    if (running) {
-        statusEl.textContent = 'Running';
-        statusEl.className = 'status running';
-        startBtn.disabled = true;
-        stopBtn.disabled = false;
-    } else {
-        statusEl.textContent = 'Stopped';
-        statusEl.className = 'status stopped';
-        startBtn.disabled = false;
-        stopBtn.disabled = true;
-    }
+    statusEl.textContent = running ? 'Running' : 'Stopped';
+    statusEl.className = running ? 'status running' : 'status stopped';
+    startBtn.disabled = running;
+    stopBtn.disabled = !running;
 }
 
 function updateStats() {
@@ -102,29 +84,32 @@ function updateStats() {
 function addEvent(event) {
     const eventEl = document.createElement('div');
     eventEl.className = 'event';
-    if (event.data.includes("Protocol: TCP")) {
-    eventEl.style.borderLeft = "4px solid #00ff99"; // green
-    } else if (event.data.includes("Protocol: UDP")) {
-    eventEl.style.borderLeft = "4px solid #3399ff"; // blue
-    } else {
-    eventEl.style.borderLeft = "4px solid #888"; // gray
-    }
+
+    const colorMap = { TCP: "#00ff99", UDP: "#3399ff", OTHER: "#888" };
+    const proto = (event.protocol || "OTHER").toUpperCase();
+    eventEl.style.borderLeft = `4px solid ${colorMap[proto] || "#888"}`;
 
     const timestamp = event.timestamp || new Date().toLocaleTimeString();
-    eventEl.textContent = `[${timestamp}] ${event.data}`;
-    
+
+    eventEl.innerHTML = `
+        <strong>[${timestamp}] ${proto}</strong><br>
+        <b>PID:</b> ${event.pid || '—'} | <b>COMM:</b> ${event.comm || '—'}<br>
+        <b>Interface:</b> ${event.ifname || '—'}<br>
+        <b>Source:</b> ${event.src_ip || '—'}:${event.src_port || '—'}<br>
+        <b>Destination:</b> ${event.dst_ip || '—'}:${event.dst_port || '—'}<br>
+        <b>Length:</b> ${event.length || 0} bytes<br>
+        <b>Reason:</b> ${event.reason || '—'}
+    `;
+
     eventsEl.insertBefore(eventEl, eventsEl.firstChild);
-    
-    // Keep only the last 100 events
-    while (eventsEl.children.length > 100) {
-        eventsEl.removeChild(eventsEl.lastChild);
-    }
+    while (eventsEl.children.length > 100) eventsEl.removeChild(eventsEl.lastChild);
 }
 
-// Initialize
+// Initialize stats
 fetch('/api/stats')
     .then(res => res.json())
     .then(data => {
         stats = data;
         updateStats();
     });
+
